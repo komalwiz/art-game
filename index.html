@@ -6,261 +6,108 @@
   <title>Art Game</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-
     body {
       background: #111;
       display: flex;
       justify-content: center;
       align-items: center;
-      min-height: 100vh;
+      height: 100vh;
       overflow: hidden;
-      font-family: sans-serif;
+      touch-action: none;
     }
-
-    #art-container {
+    #container {
       position: relative;
-      display: inline-block;
-    }
-
-    #art-container img {
-      max-height: 95vh;
+      height: 95vh;
+      /* match image aspect ratio 2139:3172 */
+      aspect-ratio: 2139 / 3172;
       max-width: 95vw;
-      display: block;
     }
-
-    .eye {
+    #container img {
       position: absolute;
-      border-radius: 50%;
-      overflow: hidden;
-      pointer-events: none;
-      display: none;
-    }
-
-    .eyes-ready .eye {
-      display: block;
-    }
-
-    .eye-white {
+      top: 0; left: 0;
       width: 100%;
       height: 100%;
-      background: radial-gradient(circle, #fff 55%, #e8e0d8 100%);
-      border-radius: 50%;
-      position: relative;
+      object-fit: fill;
     }
-
-    .pupil {
+    #container canvas {
       position: absolute;
-      width: 45%;
-      height: 45%;
-      background: radial-gradient(circle at 35% 35%, #3a2a1a, #0a0500);
-      border-radius: 50%;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      transition: transform 0.05s ease-out;
-    }
-
-    .pupil::after {
-      content: '';
-      position: absolute;
-      width: 30%;
-      height: 30%;
-      background: rgba(255, 255, 255, 0.7);
-      border-radius: 50%;
-      top: 18%;
-      left: 20%;
-    }
-
-    /* Calibration UI */
-    #calibrate-btn {
-      position: fixed;
-      top: 10px;
-      right: 10px;
-      padding: 8px 16px;
-      background: rgba(255,255,255,0.15);
-      color: #ccc;
-      border: 1px solid rgba(255,255,255,0.3);
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 13px;
-      z-index: 100;
-      backdrop-filter: blur(5px);
-    }
-    #calibrate-btn:hover { background: rgba(255,255,255,0.3); color: #fff; }
-
-    #instructions {
-      position: fixed;
-      top: 50px;
-      right: 10px;
-      color: #ffa;
-      font-size: 13px;
-      background: rgba(0,0,0,0.7);
-      padding: 8px 12px;
-      border-radius: 6px;
-      display: none;
-      z-index: 100;
-      max-width: 220px;
+      top: 0; left: 0;
+      width: 100%;
+      height: 100%;
     }
   </style>
 </head>
 <body>
-  <div id="art-container">
-    <img id="artwork" src="background_web.jpg" alt="Artwork">
-    <!-- Left eye -->
-    <div class="eye" id="left-eye">
-      <div class="eye-white">
-        <div class="pupil" id="left-pupil"></div>
-      </div>
-    </div>
-    <!-- Right eye -->
-    <div class="eye" id="right-eye">
-      <div class="eye-white">
-        <div class="pupil" id="right-pupil"></div>
-      </div>
-    </div>
+  <div id="container">
+    <img src="background_web.jpg" alt="Art">
+    <canvas id="eyes"></canvas>
   </div>
-
-  <button id="calibrate-btn">📍 Adjust Eyes</button>
-  <div id="instructions">
-    Click on the <b>center of the left eye</b> first, then the <b>right eye</b>. Then adjust size with scroll wheel.
-  </div>
-
   <script>
-    const artwork = document.getElementById('artwork');
-    const container = document.getElementById('art-container');
-    const leftEye = document.getElementById('left-eye');
-    const rightEye = document.getElementById('right-eye');
-    const leftPupil = document.getElementById('left-pupil');
-    const rightPupil = document.getElementById('right-pupil');
-    const calibrateBtn = document.getElementById('calibrate-btn');
-    const instructions = document.getElementById('instructions');
+    const canvas = document.getElementById('eyes');
+    const ctx = canvas.getContext('2d');
+    const container = document.getElementById('container');
 
-    // Eye positions as percentage of image dimensions
-    // Default guess — adjust via calibration mode
-    let eyeConfig = {
-      leftX: 42.5,   // % from left
-      leftY: 29,     // % from top
-      rightX: 57,
-      rightY: 28.5,
-      size: 7         // % of image width
-    };
+    // Internal drawing resolution (matches image)
+    canvas.width = 2139;
+    canvas.height = 3172;
 
-    // Load saved positions from localStorage
-    const saved = localStorage.getItem('eyeConfig');
-    if (saved) {
-      eyeConfig = JSON.parse(saved);
-    }
+    // Eye config in image coordinates (2x size)
+    const eyeR = 130;
+    const pupilR = 58;
+    const maxMove = 28;
+    const leftEye  = { x: 880, y: 1656 };
+    const rightEye = { x: 1208, y: 1591 };
 
-    function positionEyes() {
-      const imgRect = artwork.getBoundingClientRect();
-      const w = imgRect.width;
-      const h = imgRect.height;
-      const eyeSize = w * (eyeConfig.size / 100);
+    let mouseX = 0, mouseY = 0;
 
-      leftEye.style.width = eyeSize + 'px';
-      leftEye.style.height = eyeSize + 'px';
-      leftEye.style.left = (eyeConfig.leftX / 100 * w - eyeSize / 2) + 'px';
-      leftEye.style.top = (eyeConfig.leftY / 100 * h - eyeSize / 2) + 'px';
-
-      rightEye.style.width = eyeSize + 'px';
-      rightEye.style.height = eyeSize + 'px';
-      rightEye.style.left = (eyeConfig.rightX / 100 * w - eyeSize / 2) + 'px';
-      rightEye.style.top = (eyeConfig.rightY / 100 * h - eyeSize / 2) + 'px';
-    }
-
-    function movePupils(mouseX, mouseY) {
-      [
-        { eye: leftEye, pupil: leftPupil },
-        { eye: rightEye, pupil: rightPupil }
-      ].forEach(({ eye, pupil }) => {
-        const rect = eye.getBoundingClientRect();
-        const eyeCenterX = rect.left + rect.width / 2;
-        const eyeCenterY = rect.top + rect.height / 2;
-
-        const dx = mouseX - eyeCenterX;
-        const dy = mouseY - eyeCenterY;
-        const angle = Math.atan2(dy, dx);
-        const dist = Math.min(Math.sqrt(dx * dx + dy * dy), rect.width * 0.22);
-
-        const moveX = Math.cos(angle) * dist;
-        const moveY = Math.sin(angle) * dist;
-
-        pupil.style.transform = `translate(calc(-50% + ${moveX}px), calc(-50% + ${moveY}px))`;
-      });
-    }
-
-    // Mouse tracking
     document.addEventListener('mousemove', (e) => {
-      if (!calibrating) {
-        movePupils(e.clientX, e.clientY);
-      }
+      // Convert screen coords to canvas internal coords
+      const rect = canvas.getBoundingClientRect();
+      mouseX = (e.clientX - rect.left) / rect.width * canvas.width;
+      mouseY = (e.clientY - rect.top) / rect.height * canvas.height;
+      draw();
     });
 
-    // Resize handling
-    window.addEventListener('resize', positionEyes);
-    artwork.addEventListener('load', () => {
-      positionEyes();
-      container.classList.add('eyes-ready');
-    });
+    function drawEye(cx, cy) {
+      // White
+      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, eyeR);
+      grad.addColorStop(0.55, '#ffffff');
+      grad.addColorStop(1, '#e8e0d8');
+      ctx.beginPath();
+      ctx.arc(cx, cy, eyeR, 0, Math.PI * 2);
+      ctx.fillStyle = grad;
+      ctx.fill();
 
-    // Calibration mode
-    let calibrating = false;
-    let calibrateStep = 0; // 0 = waiting, 1 = click left eye, 2 = click right eye
+      // Pupil offset
+      const dx = mouseX - cx;
+      const dy = mouseY - cy;
+      const angle = Math.atan2(dy, dx);
+      const dist = Math.min(Math.sqrt(dx*dx + dy*dy) * 0.05, maxMove);
+      const px = cx + Math.cos(angle) * dist;
+      const py = cy + Math.sin(angle) * dist;
 
-    calibrateBtn.addEventListener('click', () => {
-      calibrating = !calibrating;
-      if (calibrating) {
-        calibrateStep = 1;
-        instructions.style.display = 'block';
-        instructions.textContent = '👁 Click on the CENTER of the LEFT eye';
-        calibrateBtn.textContent = '❌ Cancel';
-        container.style.cursor = 'crosshair';
-      } else {
-        stopCalibration();
-      }
-    });
+      const pgrad = ctx.createRadialGradient(px - pupilR*0.3, py - pupilR*0.3, 0, px, py, pupilR);
+      pgrad.addColorStop(0, '#3a2a1a');
+      pgrad.addColorStop(1, '#0a0500');
+      ctx.beginPath();
+      ctx.arc(px, py, pupilR, 0, Math.PI * 2);
+      ctx.fillStyle = pgrad;
+      ctx.fill();
 
-    function stopCalibration() {
-      calibrating = false;
-      calibrateStep = 0;
-      instructions.style.display = 'none';
-      calibrateBtn.textContent = '📍 Adjust Eyes';
-      container.style.cursor = 'default';
+      // Highlight
+      ctx.beginPath();
+      ctx.arc(px - 16, py - 16, 16, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      ctx.fill();
     }
 
-    container.addEventListener('click', (e) => {
-      if (!calibrating) return;
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawEye(leftEye.x, leftEye.y);
+      drawEye(rightEye.x, rightEye.y);
+    }
 
-      const imgRect = artwork.getBoundingClientRect();
-      const xPct = ((e.clientX - imgRect.left) / imgRect.width) * 100;
-      const yPct = ((e.clientY - imgRect.top) / imgRect.height) * 100;
-
-      if (calibrateStep === 1) {
-        eyeConfig.leftX = xPct;
-        eyeConfig.leftY = yPct;
-        positionEyes();
-        calibrateStep = 2;
-        instructions.textContent = '👁 Now click on the CENTER of the RIGHT eye';
-      } else if (calibrateStep === 2) {
-        eyeConfig.rightX = xPct;
-        eyeConfig.rightY = yPct;
-        positionEyes();
-        localStorage.setItem('eyeConfig', JSON.stringify(eyeConfig));
-        instructions.innerHTML = '✅ Done! Use <b>scroll wheel</b> to resize eyes. Click "Adjust Eyes" again to recalibrate.';
-        setTimeout(stopCalibration, 2500);
-      }
-    });
-
-    // Scroll to resize eyes
-    document.addEventListener('wheel', (e) => {
-      e.preventDefault();
-      eyeConfig.size = Math.max(1, Math.min(15, eyeConfig.size + (e.deltaY > 0 ? -0.3 : 0.3)));
-      positionEyes();
-      localStorage.setItem('eyeConfig', JSON.stringify(eyeConfig));
-    }, { passive: false });
-
-    // Initial position
-    positionEyes();
+    draw();
   </script>
 </body>
 </html>
